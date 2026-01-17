@@ -1,0 +1,313 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrderStatus {
+  PENDING
+  PREPARING
+  READY
+  SERVED
+  CLOSED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  MOBILE_MONEY
+  BANK_TRANSFER
+}
+
+enum StockMovementType {
+  PURCHASE
+  SALE
+  WASTAGE
+  STAFF_MEAL
+  ADJUSTMENT
+  TRANSFER
+  COUNT
+}
+
+enum RoleName {
+  ADMIN
+  MANAGER
+  CASHIER
+  WAITER
+  KITCHEN
+  STOREKEEPER
+  ACCOUNTANT
+}
+
+model Branch {
+  id        String   @id @default(uuid())
+  name      String
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
+  orders    Order[]
+  shifts    Shift[]
+  expenses  Expense[]
+}
+
+model Role {
+  id   String   @id @default(uuid())
+  name RoleName @unique
+  users User[]
+}
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  password    String
+  name        String
+  roleId      String
+  branchId    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  role        Role     @relation(fields: [roleId], references: [id])
+  branch      Branch   @relation(fields: [branchId], references: [id])
+  auditLogs   AuditLog[]
+}
+
+model MenuCategory {
+  id        String   @id @default(uuid())
+  name      String
+  branchId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  items     MenuItem[]
+}
+
+model MenuItem {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  price       Decimal
+  categoryId  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  category    MenuCategory @relation(fields: [categoryId], references: [id])
+  modifiers   Modifier[]
+  recipe      Recipe?
+}
+
+model Modifier {
+  id        String   @id @default(uuid())
+  name      String
+  price     Decimal
+  itemId    String
+  item      MenuItem @relation(fields: [itemId], references: [id])
+}
+
+model Recipe {
+  id        String   @id @default(uuid())
+  itemId    String   @unique
+  createdAt DateTime @default(now())
+  item      MenuItem @relation(fields: [itemId], references: [id])
+  items     RecipeItem[]
+}
+
+model RecipeItem {
+  id          String     @id @default(uuid())
+  recipeId    String
+  ingredientId String
+  quantity    Decimal
+  recipe      Recipe     @relation(fields: [recipeId], references: [id])
+  ingredient  Ingredient @relation(fields: [ingredientId], references: [id])
+}
+
+model Ingredient {
+  id        String   @id @default(uuid())
+  name      String
+  unit      String
+  avgCost   Decimal  @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  recipeItems RecipeItem[]
+}
+
+model Supplier {
+  id        String   @id @default(uuid())
+  name      String
+  contact   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  purchaseOrders PurchaseOrder[]
+}
+
+model PurchaseOrder {
+  id          String   @id @default(uuid())
+  supplierId  String
+  branchId    String
+  status      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  supplier    Supplier @relation(fields: [supplierId], references: [id])
+  items       POItem[]
+  receipts    GoodsReceipt[]
+}
+
+model POItem {
+  id             String   @id @default(uuid())
+  purchaseOrderId String
+  ingredientId   String
+  quantity       Decimal
+  unitCost       Decimal
+  purchaseOrder  PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  ingredient     Ingredient    @relation(fields: [ingredientId], references: [id])
+}
+
+model GoodsReceipt {
+  id             String   @id @default(uuid())
+  purchaseOrderId String
+  receivedAt     DateTime @default(now())
+  purchaseOrder  PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+}
+
+model InventoryBatch {
+  id           String   @id @default(uuid())
+  ingredientId String
+  quantity     Decimal
+  unitCost     Decimal
+  receivedAt   DateTime @default(now())
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id])
+}
+
+model StockMovement {
+  id           String   @id @default(uuid())
+  ingredientId String
+  branchId     String
+  type         StockMovementType
+  quantity     Decimal
+  unitCost     Decimal
+  note         String?
+  createdAt    DateTime @default(now())
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id])
+}
+
+model StockCount {
+  id         String   @id @default(uuid())
+  branchId   String
+  createdAt  DateTime @default(now())
+  note       String?
+  items      StockCountItem[]
+}
+
+model StockCountItem {
+  id          String   @id @default(uuid())
+  stockCountId String
+  ingredientId String
+  countedQty   Decimal
+  systemQty    Decimal
+  avgCost      Decimal
+  stockCount   StockCount @relation(fields: [stockCountId], references: [id])
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id])
+}
+
+model Order {
+  id          String   @id @default(uuid())
+  branchId    String
+  tableNo     String?
+  type        String
+  status      OrderStatus
+  customerId  String?
+  subtotal    Decimal
+  discount    Decimal
+  total       Decimal
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  items       OrderItem[]
+  payments    Payment[]
+  refunds     Refund[]
+}
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  orderId     String
+  menuItemId  String
+  name        String
+  price       Decimal
+  quantity    Int
+  modifiers   Json?
+  note        String?
+  status      OrderStatus
+  order       Order @relation(fields: [orderId], references: [id])
+}
+
+model Payment {
+  id          String   @id @default(uuid())
+  orderId     String
+  method      PaymentMethod
+  amount      Decimal
+  idempotencyKey String @unique
+  createdAt   DateTime @default(now())
+  order       Order @relation(fields: [orderId], references: [id])
+}
+
+model Refund {
+  id          String   @id @default(uuid())
+  orderId     String
+  amount      Decimal
+  reason      String
+  approvedBy  String
+  createdAt   DateTime @default(now())
+  order       Order @relation(fields: [orderId], references: [id])
+}
+
+model Shift {
+  id          String   @id @default(uuid())
+  branchId    String
+  openedBy    String
+  closedBy    String?
+  openedAt    DateTime @default(now())
+  closedAt    DateTime?
+  expectedCash Decimal @default(0)
+  countedCash  Decimal @default(0)
+  discrepancy  Decimal @default(0)
+  branch      Branch @relation(fields: [branchId], references: [id])
+}
+
+model Expense {
+  id          String   @id @default(uuid())
+  branchId    String
+  category    String
+  amount      Decimal
+  note        String?
+  attachmentUrl String?
+  createdAt   DateTime @default(now())
+  branch      Branch @relation(fields: [branchId], references: [id])
+}
+
+model Customer {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String?
+  email     String?
+  createdAt DateTime @default(now())
+  loyaltyPoints LoyaltyPoint[]
+}
+
+model LoyaltyPoint {
+  id         String   @id @default(uuid())
+  customerId String
+  points     Int
+  createdAt  DateTime @default(now())
+  customer   Customer @relation(fields: [customerId], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String
+  entity    String
+  entityId  String
+  reason    String?
+  createdAt DateTime @default(now())
+  user      User @relation(fields: [userId], references: [id])
+}
